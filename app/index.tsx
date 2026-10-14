@@ -1,0 +1,8 @@
+import React,{useCallback,useState} from 'react';
+import {ScrollView,Text,View} from 'react-native';
+import {useFocusEffect,useRouter} from 'expo-router';
+import {Card,Title,Button,styles} from '../../src/components/UI';
+import {getLatestCondition,getXp} from '../../src/db/database';
+import {recommend,levelFromXp,GAMES,Condition} from '../../src/lib/games';
+export default function Home(){const router=useRouter();const [c,setC]=useState<Condition|null>(null);const [xp,setXp]=useState(0);useFocusEffect(useCallback(()=>{getLatestCondition().then(setC).catch(console.error);getXp().then(setXp).catch(console.error)},[]));const suggestion=c?recommend(c):null;
+return <ScrollView style={styles.screen}><Title>Energy Reset</Title><Card><Text style={styles.label}>今日のコンディション</Text>{c?<Text style={styles.text}>眠気 {c.sleepiness}　だるさ {c.fatigue}　気分 {c.mood}　ストレス {c.stress}</Text>:<Text style={styles.muted}>まずは体調を記録しましょう</Text>}<Button title="体調を記録" onPress={()=>router.push('/check-in')}/></Card><Card><Text style={styles.label}>おすすめ</Text><Text style={styles.text}>{!c?'体調を記録するとおすすめが表示されます':suggestion==='rest'?'眠気・だるさが強めです。ゲームより休息を優先しましょう。':GAMES.find(g=>g.id===suggestion)?.name}</Text>{suggestion&&suggestion!=='rest'&&<Button title="ゲームを始める" onPress={()=>router.push(`/game/${suggestion}`)}/>}<Button secondary title="ゲーム一覧へ" onPress={()=>router.push('/(tabs)/games')}/></Card><Card><Text style={styles.label}>成長記録</Text><Text style={styles.text}>レベル {levelFromXp(xp)}　累計 {xp} XP</Text><Text style={styles.muted}>体調が悪い日は休むことも大切です。ゲームは治療の代わりではありません。</Text></Card><View style={{height:20}}/></ScrollView>}

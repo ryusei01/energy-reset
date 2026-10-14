@@ -1,0 +1,12 @@
+node_modules/
+.expo/
+dist/
+web-build/
+*.apk
+*.aab
+.env
+.env.*
+!.env.example
+*.db
+*.db-journal
+.DS_Store
