@@ -1,25 +1,196 @@
-import React,{useEffect,useMemo,useRef,useState} from 'react';
-import {Alert,ScrollView,Text,View,Pressable} from 'react-native';
-import {useLocalSearchParams,useRouter} from 'expo-router';
-import {Button,Card,ScoreInput,Title,styles} from '../../src/components/UI';
-import {GAMES,GameId,Condition,delta} from '../../src/lib/games';
-import {startSession,endSession} from '../../src/db/database';
-const initial:Condition={sleepiness:5,fatigue:5,mood:5,stress:5};
-function ConditionForm({value,onChange}:{value:Condition;onChange:(v:Condition)=>void}){return <><ScoreInput label="眠気" value={value.sleepiness} onChange={n=>onChange({...value,sleepiness:n})}/><ScoreInput label="だるさ" value={value.fatigue} onChange={n=>onChange({...value,fatigue:n})}/><ScoreInput label="気分のよさ" value={value.mood} onChange={n=>onChange({...value,mood:n})}/><ScoreInput label="ストレス" value={value.stress} onChange={n=>onChange({...value,stress:n})}/></>}
-function GameBody({id,score,onScore,seconds}:{id:GameId;score:number;onScore:()=>void;seconds:number}){
- const [bubble,setBubble]=useState(0);const [phase,setPhase]=useState(0);const [task,setTask]=useState(false);
- const breath=Math.floor(seconds/4)%2===0;
- if(id==='breath')return <View style={{alignItems:'center',paddingVertical:30,gap:16}}><View style={{width:breath?175:115,height:breath?175:115,borderRadius:100,backgroundColor:'#9CD6B2',alignItems:'center',justifyContent:'center'}}><Text style={{fontSize:42}}>{score>5?'FLOWER':'SEED'}</Text></View><Text style={styles.label}>{breath?'ゆっくり吸う（約4秒）':'ゆっくり吐く（約4秒）'}</Text><Text style={styles.muted}>苦しくない自然な呼吸で。息を止める必要はありません。</Text><Button title="花を育てる" onPress={onScore}/></View>;
- if(id==='bubble')return <View style={{alignItems:'center',gap:12,padding:12}}><Text style={styles.muted}>泡を割ってスコアを集めよう</Text><View style={{flexDirection:'row',flexWrap:'wrap',justifyContent:'center',gap:12}}>{Array.from({length:12},(_,i)=><Pressable key={`${bubble}-${i}`} onPress={()=>{setBubble(v=>v+1);onScore()}} style={{width:70,height:70,borderRadius:40,backgroundColor:['#93C5FD','#C4B5FD','#F9A8D4','#99F6E4'][(i+bubble)%4],alignItems:'center',justifyContent:'center'}}><Text style={{fontSize:25,color:'#334155'}}>○</Text></Pressable>)}</View></View>;
- if(id==='rhythm')return <View style={{alignItems:'center',gap:16,padding:25}}><Text style={styles.muted}>画面の合図に合わせてタップ</Text><Text style={{fontSize:65,color:'#365CE6'}}>{seconds%2===0?'TAP':'WAIT'}</Text><Button title="リズムをタップ" onPress={()=>{onScore();setPhase(v=>v+1)}}/><Text style={styles.muted}>タップ数 {phase}（音なしのプロトタイプ）</Text></View>;
- return <View style={{gap:14,padding:10}}><Text style={styles.label}>現実世界のミニクエスト</Text><Text style={styles.text}>水を飲む、机を片付ける、エディタを開くなど、今できる小さな行動を1つ実行しよう。</Text><Button title={task?'達成済み':'小さな行動を達成した'} disabled={task} onPress={()=>{setTask(true);onScore()}}/><Text style={styles.muted}>無理な日は「終了して記録」で休息に切り替えられます。</Text></View>;
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Alert, ScrollView, Text, View } from 'react-native';
+import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
+import { StatusBar } from 'expo-status-bar';
+import { Button, Card, ScoreInput, Title, styles } from '../../src/components/UI';
+import { BreathGarden } from '../../src/components/games/BreathGarden';
+import { BubblePop } from '../../src/components/games/BubblePop';
+import { RhythmReset } from '../../src/components/games/RhythmReset';
+import { SmallQuest } from '../../src/components/games/SmallQuest';
+import { GAMES, type Condition, type GameId, delta } from '../../src/lib/games';
+import { endSession, getLatestConditionLog, getPlayPrefs, startSession, type PlayPrefs } from '../../src/db/database';
+
+const initial: Condition = { sleepiness: 5, fatigue: 5, mood: 5, stress: 5 };
+const defaultPrefs: PlayPrefs = { sound: true, haptic: true, reminder: false, reminderHour: 21, reminderMinute: 0 };
+
+function ConditionForm({ value, onChange }: { value: Condition; onChange: (v: Condition) => void }) {
+  return (
+    <>
+      <ScoreInput label="眠気" value={value.sleepiness} onChange={n => onChange({ ...value, sleepiness: n })} />
+      <ScoreInput label="だるさ" value={value.fatigue} onChange={n => onChange({ ...value, fatigue: n })} />
+      <ScoreInput label="気分のよさ" value={value.mood} onChange={n => onChange({ ...value, mood: n })} />
+      <ScoreInput label="ストレス" value={value.stress} onChange={n => onChange({ ...value, stress: n })} />
+    </>
+  );
 }
-export default function GameScreen(){const params=useLocalSearchParams<{id:string}>();const router=useRouter();const game=GAMES.find(g=>g.id===params.id);const [stage,setStage]=useState<'before'|'play'|'after'|'done'>('before');const [before,setBefore]=useState<Condition>(initial);const [after,setAfter]=useState<Condition>(initial);const [seconds,setSeconds]=useState(game?.duration??120);const [score,setScore]=useState(0);const [busy,setBusy]=useState(false);const session=useRef<number|null>(null);
- useEffect(()=>{if(stage!=='play')return;const timer=setInterval(()=>setSeconds(s=>Math.max(0,s-1)),1000);return()=>clearInterval(timer)},[stage]);
- useEffect(()=>{if(stage==='play'&&seconds===0)setStage('after')},[stage,seconds]);
- if(!game)return <View style={styles.screen}><Title>ゲームが見つかりません</Title><Button title="戻る" onPress={()=>router.back()}/></View>;
- const begin=async()=>{setBusy(true);try{session.current=await startSession(game.id,before);setAfter(before);setStage('play')}catch{Alert.alert('エラー','開始できませんでした')}finally{setBusy(false)}};
- const finish=async()=>{if(session.current===null)return;setBusy(true);try{await endSession(session.current,after,score);setStage('done')}catch{Alert.alert('エラー','保存できませんでした')}finally{setBusy(false)}};
- const d=delta(before,after);
- return <ScrollView style={styles.screen}><Title>{game.name}</Title>{stage==='before'&&<Card><Text style={styles.label}>プレイ前の体調</Text><ConditionForm value={before} onChange={setBefore}/><Button title="ゲーム開始" disabled={busy} onPress={begin}/></Card>}{stage==='play'&&<Card><Text style={styles.label}>残り {Math.floor(seconds/60)}:{String(seconds%60).padStart(2,'0')}　スコア {score}</Text><GameBody id={game.id} seconds={seconds} score={score} onScore={()=>setScore(s=>s+1)}/><Button secondary title="終了して体調を記録" onPress={()=>setStage('after')}/></Card>}{stage==='after'&&<Card><Text style={styles.label}>プレイ後の体調</Text><ConditionForm value={after} onChange={setAfter}/><Button title="結果を保存" disabled={busy} onPress={finish}/></Card>}{stage==='done'&&<Card><Text style={styles.label}>プレイ完了</Text><Text style={styles.text}>スコア：{score}　獲得XP：15</Text><Text style={styles.text}>眠気の改善：{d.sleepiness}　だるさの改善：{d.fatigue}</Text><Text style={styles.text}>気分の変化：{d.mood}　ストレスの改善：{d.stress}</Text><Text style={styles.muted}>数値は自己評価の変化です。悪化した場合は休息を優先してください。</Text><Button title="タスクを始める" onPress={()=>router.replace('/(tabs)/tasks')}/><Button secondary title="ホームへ" onPress={()=>router.replace('/(tabs)')}/></Card>}</ScrollView>
+
+export default function GameScreen() {
+  const params = useLocalSearchParams<{ id: string | string[] }>();
+  const gameId = (Array.isArray(params.id) ? params.id[0] : params.id) as GameId | undefined;
+  const router = useRouter();
+  const navigation = useNavigation();
+  const game = GAMES.find(item => item.id === gameId);
+  const [stage, setStage] = useState<'before' | 'play' | 'after' | 'done'>('before');
+  const [before, setBefore] = useState<Condition>(initial);
+  const [after, setAfter] = useState<Condition>(initial);
+  const [beforeLogId, setBeforeLogId] = useState<number | null>(null);
+  const [beforeDirty, setBeforeDirty] = useState(false);
+  const [seconds, setSeconds] = useState(game?.duration ?? 120);
+  const [score, setScore] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const [prefs, setPrefs] = useState<PlayPrefs>(defaultPrefs);
+  const session = useRef<number | null>(null);
+
+  useEffect(() => {
+    navigation.setOptions({ headerShown: stage !== 'play', title: game?.name ?? 'リカバリーゲーム' });
+  }, [game?.name, navigation, stage]);
+
+  useEffect(() => {
+    if (stage !== 'play') return;
+    activateKeepAwakeAsync('energy-reset-play').catch(() => {});
+    return () => {
+      deactivateKeepAwake('energy-reset-play').catch(() => {});
+    };
+  }, [stage]);
+
+  useFocusEffect(useCallback(() => {
+    if (stage !== 'before') return;
+    let cancelled = false;
+    getLatestConditionLog().then(log => {
+      if (cancelled) return;
+      if (log) {
+        setBefore({ sleepiness: log.sleepiness, fatigue: log.fatigue, mood: log.mood, stress: log.stress });
+        setBeforeLogId(log.id);
+        setBeforeDirty(false);
+      } else {
+        setBeforeLogId(null);
+        setBeforeDirty(true);
+      }
+    }).catch(console.error);
+    getPlayPrefs().then(next => {
+      if (!cancelled) setPrefs(next);
+    }).catch(console.error);
+    return () => {
+      cancelled = true;
+    };
+  }, [stage]));
+
+  useEffect(() => {
+    setStage('before');
+    setScore(0);
+    session.current = null;
+    if (game) setSeconds(game.duration);
+  }, [game, gameId]);
+
+  useEffect(() => {
+    if (stage !== 'play' || game?.id === 'quest') return;
+    const timer = setInterval(() => setSeconds(current => Math.max(0, current - 1)), 1000);
+    return () => clearInterval(timer);
+  }, [game?.id, stage]);
+
+  useEffect(() => {
+    if (stage === 'play' && seconds === 0 && game?.id !== 'quest') setStage('after');
+  }, [game?.id, seconds, stage]);
+
+  if (!game) {
+    return (
+      <View style={styles.screen}>
+        <Title>ゲームが見つかりません</Title>
+        <Button title="戻る" onPress={() => router.back()} />
+      </View>
+    );
+  }
+
+  const useSavedBefore = !beforeDirty && beforeLogId != null;
+  const editBefore = (value: Condition) => {
+    setBefore(value);
+    setBeforeDirty(true);
+    setBeforeLogId(null);
+  };
+  const begin = async () => {
+    setBusy(true);
+    try {
+      const opts = useSavedBefore && beforeLogId != null ? { beforeLogId } : {};
+      session.current = await startSession(game.id, before, opts);
+      setScore(0);
+      setSeconds(game.duration);
+      setAfter(before);
+      setStage('play');
+    } catch (error) {
+      console.error(error);
+      Alert.alert('エラー', 'ゲームを開始できませんでした');
+    } finally {
+      setBusy(false);
+    }
+  };
+  const finish = async () => {
+    if (session.current === null) return;
+    setBusy(true);
+    try {
+      await endSession(session.current, after, score);
+      setStage('done');
+    } catch (error) {
+      console.error(error);
+      Alert.alert('エラー', '保存できませんでした');
+    } finally {
+      setBusy(false);
+    }
+  };
+  const change = delta(before, after);
+  const playProps = { sound: prefs.sound, haptic: prefs.haptic, seconds, score, onScore: setScore, onEnd: () => setStage('after') };
+
+  if (stage === 'play') {
+    return (
+      <View style={{ flex: 1 }}>
+        <StatusBar style="light" />
+        {game.id === 'breath' && <BreathGarden {...playProps} />}
+        {game.id === 'bubble' && <BubblePop {...playProps} />}
+        {game.id === 'rhythm' && <RhythmReset {...playProps} />}
+        {game.id === 'quest' && <SmallQuest {...playProps} />}
+      </View>
+    );
+  }
+
+  return (
+    <ScrollView style={styles.screen}>
+      <StatusBar style="dark" />
+      <Title>{game.name}</Title>
+      {stage === 'before' && useSavedBefore && (
+        <Card>
+          <Text style={styles.label}>記録済みの体調でプレイ</Text>
+          <Text style={styles.text}>眠気 {before.sleepiness}　だるさ {before.fatigue}　気分 {before.mood}　ストレス {before.stress}</Text>
+          <Text style={styles.muted}>ホームで記録した体調をプレイ前の基準に使います。</Text>
+          <Button title="ゲーム開始" disabled={busy} onPress={begin} />
+          <Button secondary title="体調を入力し直す" onPress={() => { setBeforeDirty(true); setBeforeLogId(null); }} />
+        </Card>
+      )}
+      {stage === 'before' && !useSavedBefore && (
+        <Card>
+          <Text style={styles.label}>プレイ前の体調</Text>
+          <Text style={styles.muted}>まだ体調が未記録です。プレイ前の状態を入力してください。</Text>
+          <ConditionForm value={before} onChange={editBefore} />
+          <Button title="ゲーム開始" disabled={busy} onPress={begin} />
+        </Card>
+      )}
+      {stage === 'after' && (
+        <Card>
+          <Text style={styles.label}>プレイ後の体調</Text>
+          <ConditionForm value={after} onChange={setAfter} />
+          <Button title="結果を保存" disabled={busy} onPress={finish} />
+        </Card>
+      )}
+      {stage === 'done' && (
+        <Card>
+          <Text style={styles.label}>プレイ完了</Text>
+          <Text style={styles.text}>スコア：{score}　セッションXP：15{game.id === 'quest' && score > 0 ? '　クエスト達成XP：20' : ''}</Text>
+          <Text style={styles.text}>眠気の改善：{change.sleepiness}　だるさの改善：{change.fatigue}</Text>
+          <Text style={styles.text}>気分の変化：{change.mood}　ストレスの改善：{change.stress}</Text>
+          <Text style={styles.muted}>数値は自己評価の変化です。悪化した場合は休息を優先してください。</Text>
+          <Button title="タスクを始める" onPress={() => router.replace('/(tabs)/tasks')} />
+          <Button secondary title="ホームへ" onPress={() => router.replace('/(tabs)')} />
+        </Card>
+      )}
+    </ScrollView>
+  );
 }
