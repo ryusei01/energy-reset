@@ -35,8 +35,11 @@ jobs:
           distribution: temurin
           java-version: '17'
           cache: gradle
-      - uses: android-actions/setup-android@v3
       - run: chmod +x android/gradlew
+      - name: Accept Android licenses
+        run: |
+          mkdir -p "$ANDROID_HOME/licenses"
+          echo "24333f8a63b6825ea9c5514f83c2829b004d1fee" > "$ANDROID_HOME/licenses/android-sdk-license"
       - run: npm ci
       - run: npm run android:apk
       - uses: actions/upload-artifact@v4
