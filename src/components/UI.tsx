@@ -13,6 +13,17 @@ export function Stepper({label,value,onChange,min,max,step=1}:{label:string;valu
   const next = Math.min(max, value + step);
   return <View style={styles.switchRow}><Text style={styles.text}>{label}</Text><View style={{flexDirection:'row',alignItems:'center',gap:8}}><Pressable accessibilityLabel={`${label}を減らす`} onPress={()=>onChange(previous)} style={styles.step}><Text style={styles.label}>−</Text></Pressable><Text style={[styles.label,{minWidth:28,textAlign:'center'}]}>{String(value).padStart(2,'0')}</Text><Pressable accessibilityLabel={`${label}を増やす`} onPress={()=>onChange(next)} style={styles.step}><Text style={styles.label}>＋</Text></Pressable></View></View>;
 }
+export function ProgressBar({ value, max, label }: { value: number; max: number; label?: string }) {
+  const ratio = max <= 0 ? 0 : Math.min(1, Math.max(0, value / max));
+  return (
+    <View style={{ gap: 6 }}>
+      {label ? <Text style={styles.muted}>{label}</Text> : null}
+      <View accessibilityRole="progressbar" style={{ height: 12, borderRadius: 8, backgroundColor: '#E8EDF5', overflow: 'hidden' }}>
+        <View style={{ width: `${Math.max(ratio > 0 ? 8 : 0, ratio * 100)}%` as const, height: 12, borderRadius: 8, backgroundColor: palette.blue }} />
+      </View>
+    </View>
+  );
+}
 export const styles = StyleSheet.create({
   screen:{flex:1,backgroundColor:palette.bg,padding:18},
   card:{backgroundColor:'white',padding:17,borderRadius:18,marginBottom:14,gap:10,shadowColor:'#17243B',shadowOpacity:0.06,shadowRadius:12,shadowOffset:{width:0,height:6},elevation:2},

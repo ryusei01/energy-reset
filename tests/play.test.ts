@@ -1,15 +1,22 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { parseBackup } from '../src/lib/backup.ts';
+import { levelFromXp, xpForLevel, xpProgress } from '../src/lib/games.ts';
 import {
   breathPhase,
   bubbleContains,
   bubblePoints,
   bubbleSpawnInterval,
   bubbleTop,
+  checkInStreak,
+  companionHint,
   companionStage,
+  companionStageLabel,
+  formatShortDate,
+  isSpecialBubble,
   judgeTap,
   nearestBeat,
+  parseCompanionKind,
   RHYTHM_BEAT_MS,
   rhythmScore,
   shiftDate,
@@ -44,6 +51,9 @@ test('bubble combo and spawn pace stay bounded', () => {
   assert.equal(bubblePoints(1), 1);
   assert.equal(bubblePoints(3), 3);
   assert.equal(bubblePoints(9), 5);
+  assert.equal(bubblePoints(3, true), 9);
+  assert.equal(isSpecialBubble(8), true);
+  assert.equal(isSpecialBubble(7), false);
   assert.equal(bubbleSpawnInterval(0), 900);
   assert.equal(bubbleSpawnInterval(90000), 420);
   assert.equal(bubbleSpawnInterval(200000), 420);
@@ -55,6 +65,29 @@ test('bubble combo and spawn pace stay bounded', () => {
 
 test('companion stages follow level', () => {
   assert.deepEqual([1, 2, 3, 4, 5, 8].map(companionStage), ['seed', 'sprout', 'bud', 'bloom', 'garden', 'garden']);
+  assert.equal(companionStageLabel('cat', 'sprout'), 'こねこ');
+  assert.equal(companionStageLabel('bird', 'seed'), 'たまご');
+  assert.equal(parseCompanionKind('fox'), 'fox');
+  assert.equal(parseCompanionKind('dragon'), 'flower');
+  assert.equal(companionHint('flower', 3, 120), 'あと 120 XP で 花');
+});
+
+test('xp progress makes the next level visible', () => {
+  assert.equal(levelFromXp(0), 1);
+  assert.equal(levelFromXp(99), 1);
+  assert.equal(levelFromXp(100), 2);
+  assert.equal(xpForLevel(3), 400);
+  assert.equal(xpProgress(0).need, 100);
+  assert.equal(xpProgress(40).into, 40);
+  assert.equal(xpProgress(100).need, 300);
+  assert.equal(xpProgress(100).remaining, 300);
+});
+
+test('check-in streaks count consecutive days and allow yesterday', () => {
+  assert.equal(checkInStreak(['2026-10-19', '2026-10-18', '2026-10-17'], '2026-10-19'), 3);
+  assert.equal(checkInStreak(['2026-10-18', '2026-10-17'], '2026-10-19'), 2);
+  assert.equal(checkInStreak(['2026-10-16'], '2026-10-19'), 0);
+  assert.equal(formatShortDate('2026-10-19'), '10/19');
 });
 
 test('sleep minutes cross midnight and reject a zero-length night', () => {
@@ -77,8 +110,18 @@ test('backup parser accepts a complete file and rejects a broken one', () => {
     },
   };
   assert.equal(parseBackup(JSON.stringify(payload))?.tables.tasks[0]?.title, '水を一杯飲む');
+  assert.deepEqual(parseBackup(JSON.stringify(payload))?.tables.daily_conditions, []);
+  const withDaily = {
+    ...payload,
+    tables: {
+      ...payload.tables,
+      daily_conditions: [{ id: 1, date: '2026-10-18', sleepiness: 4, fatigue: 5, mood: 6, stress: 3, recorded_at: '2026-10-18T00:00:00.000Z' }],
+    },
+  };
+  assert.equal(parseBackup(JSON.stringify(withDaily))?.tables.daily_conditions[0]?.mood, 6);
   assert.equal(parseBackup('not json'), null);
   assert.equal(parseBackup(JSON.stringify({ ...payload, tables: { ...payload.tables, game_sessions: [{ ...payload.tables.game_sessions[0], before_id: 9 }] } })), null);
+  assert.equal(parseBackup(JSON.stringify({ ...withDaily, tables: { ...withDaily.tables, daily_conditions: [{ ...withDaily.tables.daily_conditions[0], date: '18日' }] } })), null);
 });
 
 test('generated tones are wav files', () => {

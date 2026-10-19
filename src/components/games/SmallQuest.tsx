@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from 'react-native';
-import { completePresetQuest, completeTaskById, getXp, listOpenTasks, type OpenTask } from '../../db/database';
-import { levelFromXp } from '../../lib/games';
-import { formatClock, GAME_VISUAL, QUEST_PRESETS } from '../../lib/play';
+import { completePresetQuest, completeTaskById, getCompanionKind, getXp, listOpenTasks, type OpenTask } from '../../db/database';
+import { xpProgress } from '../../lib/games';
+import { formatClock, GAME_VISUAL, QUEST_PRESETS, type CompanionKind } from '../../lib/play';
 import { Companion } from '../Companion';
 import { GameFrame, type GamePlayProps } from './GameFrame';
 import * as Haptics from 'expo-haptics';
@@ -32,10 +32,12 @@ export function SmallQuest({ haptic, onScore, onEnd }: GamePlayProps) {
   const [awarded, setAwarded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [xp, setXp] = useState(0);
+  const [kind, setKind] = useState<CompanionKind>('flower');
 
   useEffect(() => {
     listOpenTasks().then(setTasks).catch(console.error);
     getXp().then(setXp).catch(console.error);
+    getCompanionKind().then(setKind).catch(console.error);
   }, []);
 
   useEffect(() => {
@@ -64,10 +66,11 @@ export function SmallQuest({ haptic, onScore, onEnd }: GamePlayProps) {
   };
 
   const progress = choice ? (120 - left) / 120 : 0;
+  const growth = xpProgress(xp);
   return (
     <GameFrame colors={GAME_VISUAL.quest.colors} title="スモールクエスト" meta={done ? '達成' : choice ? formatClock(left) : '選択'} endLabel={done ? '体調を記録する' : '終了して記録'} onEnd={onEnd}>
       <ScrollView contentContainerStyle={{ alignItems: 'center', paddingBottom: 12 }}>
-        <Companion level={levelFromXp(xp)} size={120} light />
+        <Companion kind={kind} level={growth.level} size={120} light progress={growth.ratio} />
         {!choice && <Text style={{ color: 'rgba(255,255,255,0.86)', textAlign: 'center', marginBottom: 12 }}>今できる行動を一つ選ぶ。2分たったら達成を記録できる。</Text>}
         {choice && (
           <View style={{ alignItems: 'center', marginBottom: 16 }}>

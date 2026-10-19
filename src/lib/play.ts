@@ -1,4 +1,4 @@
-import type { GameId } from './games';
+import type { Condition, GameId } from './games';
 
 export const BREATH_INHALE_MS = 4000;
 export const BREATH_EXHALE_MS = 6000;
@@ -47,9 +47,14 @@ export function rhythmScore(perfect: number, good: number) {
   return perfect * 3 + good;
 }
 
-export function bubblePoints(combo: number) {
+export function isSpecialBubble(id: number) {
+  return id > 0 && id % 8 === 0;
+}
+
+export function bubblePoints(combo: number, special = false) {
   const streak = Math.max(1, Math.floor(combo));
-  return 1 + Math.min(4, streak - 1);
+  const base = 1 + Math.min(4, streak - 1);
+  return special ? base * 3 : base;
 }
 
 export function bubbleSpawnInterval(elapsedMs: number) {
@@ -84,6 +89,73 @@ export function companionStage(level: number): CompanionStage {
   return 'garden';
 }
 
+export type CompanionKind = 'flower' | 'cat' | 'bird' | 'fox';
+
+export const COMPANIONS: readonly { id: CompanionKind; name: string; blurb: string }[] = [
+  { id: 'flower', name: '花', blurb: '庭でゆっくり育つ' },
+  { id: 'cat', name: 'ねこ', blurb: 'そばでくつろぐ' },
+  { id: 'bird', name: 'とり', blurb: 'リズムに合わせて羽ばたく' },
+  { id: 'fox', name: 'きつね', blurb: '静かに見守る' },
+];
+
+export const COMPANION_STAGES: CompanionStage[] = ['seed', 'sprout', 'bud', 'bloom', 'garden'];
+
+const KIND_STAGE_LABEL: Record<CompanionKind, Record<CompanionStage, string>> = {
+  flower: STAGE_LABEL,
+  cat: { seed: 'まる', sprout: 'こねこ', bud: 'ねこ', bloom: 'のんびりねこ', garden: 'お庭のねこ' },
+  bird: { seed: 'たまご', sprout: 'ひよこ', bud: 'ことり', bloom: 'とり', garden: '巣' },
+  fox: { seed: 'けだま', sprout: 'こぎつね', bud: 'きつね', bloom: 'おおきなきつね', garden: 'すみか' },
+};
+
+export function isCompanionKind(value: string | null | undefined): value is CompanionKind {
+  return value === 'flower' || value === 'cat' || value === 'bird' || value === 'fox';
+}
+
+export function parseCompanionKind(value: string | null | undefined): CompanionKind {
+  return isCompanionKind(value) ? value : 'flower';
+}
+
+export function companionStageLabel(kind: CompanionKind, stage: CompanionStage) {
+  return KIND_STAGE_LABEL[kind][stage];
+}
+
+export function nextCompanionStage(level: number): CompanionStage | null {
+  const stage = companionStage(level);
+  if (stage === 'garden') return null;
+  return companionStage(level + 1);
+}
+
+export function companionHint(kind: CompanionKind, level: number, remainingXp: number) {
+  const next = nextCompanionStage(level);
+  if (!next) return 'お庭は、休む日もそのまま残ります';
+  return `あと ${remainingXp} XP で ${companionStageLabel(kind, next)}`;
+}
+
+export function checkInStreak(dates: string[], today: string) {
+  const recorded = new Set(dates);
+  let cursor = today;
+  if (!recorded.has(cursor)) {
+    cursor = shiftDate(today, -1);
+    if (!recorded.has(cursor)) return 0;
+  }
+  let streak = 0;
+  while (recorded.has(cursor)) {
+    streak += 1;
+    cursor = shiftDate(cursor, -1);
+  }
+  return streak;
+}
+
+export function companionLine(kind: CompanionKind, condition: Condition | null, streak: number) {
+  const name = COMPANIONS.find(item => item.id === kind)?.name ?? '仲間';
+  if (!condition) return `${name}は、今日の体調が残るのを待っています`;
+  if (streak >= 3) return `${name}と${streak}日続いています。ペースはそのままで大丈夫です`;
+  if (condition.sleepiness >= 8 || condition.fatigue >= 8) return `${name}も、今日は静かにそばにいます`;
+  if (condition.stress >= 7) return `${name}と、ゆっくり呼吸してみましょう`;
+  if (condition.mood <= 4) return `${name}は、小さな遊びからでいいよ、と待っています`;
+  return `${name}は、今日の庭を見守っています`;
+}
+
 export function sleepMinutes(bedHour: number, bedMinute: number, wakeHour: number, wakeMinute: number) {
   const bed = bedHour * 60 + bedMinute;
   let wake = wakeHour * 60 + wakeMinute;
@@ -105,6 +177,12 @@ export function formatDate(date: Date) {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${date.getFullYear()}-${month}-${day}`;
+}
+
+export function formatShortDate(iso: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!match) return iso;
+  return `${Number(match[2])}/${Number(match[3])}`;
 }
 
 export function shiftDate(iso: string, days: number) {

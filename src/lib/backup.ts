@@ -21,6 +21,15 @@ export type SessionRow = {
 export type TaskRow = { id: number; title: string; done: number; created_at: string };
 export type XpRow = { id: number; source: string; points: number; created_at: string };
 export type SleepRow = { id: number; date: string; minutes: number | null; early_awake: number };
+export type DailyConditionRow = {
+  id: number;
+  date: string;
+  sleepiness: number;
+  fatigue: number;
+  mood: number;
+  stress: number;
+  recorded_at: string;
+};
 export type SettingRow = { key: string; value: string };
 
 export type BackupPayload = {
@@ -32,6 +41,7 @@ export type BackupPayload = {
     tasks: TaskRow[];
     xp_events: XpRow[];
     sleep_logs: SleepRow[];
+    daily_conditions: DailyConditionRow[];
     settings: SettingRow[];
   };
 };
@@ -73,6 +83,7 @@ export function parseBackup(text: string): BackupPayload | null {
   const taskSource = rows(tables, 'tasks');
   const xpSource = rows(tables, 'xp_events');
   const sleepSource = rows(tables, 'sleep_logs');
+  const dailySource = rows(tables, 'daily_conditions');
   const settingSource = rows(tables, 'settings');
   if (!conditionSource || !sessionSource || !taskSource || !xpSource || !sleepSource || !settingSource) return null;
 
@@ -126,6 +137,24 @@ export function parseBackup(text: string): BackupPayload | null {
   }
   if (!unique(sleep_logs.map(row => row.id))) return null;
 
+  const daily_conditions: DailyConditionRow[] = [];
+  const dailyDates = new Set<string>();
+  for (const row of dailySource ?? []) {
+    if (!isRecord(row) || !isInt(row.id, 1, 1_000_000_000) || !isText(row.date) || !/^\d{4}-\d{2}-\d{2}$/.test(row.date) || !isInt(row.sleepiness, 0, 10) || !isInt(row.fatigue, 0, 10) || !isInt(row.mood, 0, 10) || !isInt(row.stress, 0, 10) || !isText(row.recorded_at)) return null;
+    if (dailyDates.has(row.date)) return null;
+    dailyDates.add(row.date);
+    daily_conditions.push({
+      id: row.id,
+      date: row.date,
+      sleepiness: row.sleepiness,
+      fatigue: row.fatigue,
+      mood: row.mood,
+      stress: row.stress,
+      recorded_at: row.recorded_at,
+    });
+  }
+  if (!unique(daily_conditions.map(row => row.id))) return null;
+
   const settings: SettingRow[] = [];
   const keys = new Set<string>();
   for (const row of settingSource) {
@@ -138,6 +167,6 @@ export function parseBackup(text: string): BackupPayload | null {
   return {
     version: 1,
     exportedAt: parsed.exportedAt,
-    tables: { condition_logs, game_sessions, tasks, xp_events, sleep_logs, settings },
+    tables: { condition_logs, game_sessions, tasks, xp_events, sleep_logs, daily_conditions, settings },
   };
 }
