@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Text, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { bubbleContains, bubblePoints, bubbleSpawnInterval, bubbleTop, formatClock, GAME_VISUAL } from '../../lib/play';
+import { bubbleContains, bubblePoints, bubbleSpawnInterval, bubbleTop, formatClock, GAME_VISUAL, isSpecialBubble } from '../../lib/play';
 import { GameFrame, type GamePlayProps } from './GameFrame';
 
 const COLORS = ['rgba(147,197,253,0.95)', 'rgba(196,181,253,0.95)', 'rgba(249,168,212,0.95)', 'rgba(153,246,228,0.95)', 'rgba(253,224,71,0.92)'];
@@ -15,6 +15,7 @@ type Bubble = {
   born: number;
   popped: boolean;
   frozenTop: number | null;
+  special: boolean;
 };
 
 function BubbleFace({ bubble, top }: { bubble: Bubble; top: number }) {
@@ -80,15 +81,17 @@ export function BubblePop({ haptic, seconds, score, onScore, onEnd }: GamePlayPr
       if (bubblesRef.current.length < 7 && widthRef.current > 0) {
         const size = 64 + Math.floor(Math.random() * 36);
         const span = Math.max(40, widthRef.current - size);
+        const special = isSpecialBubble(nextId);
         const bubble: Bubble = {
           id: nextId,
           x: Math.random() * span,
-          size,
-          color: COLORS[nextId % COLORS.length],
+          size: special ? size + 10 : size,
+          color: special ? 'rgba(251,191,36,0.96)' : COLORS[nextId % COLORS.length],
           duration: 3400 + Math.floor(Math.random() * 2200),
           born: Date.now(),
           popped: false,
           frozenTop: null,
+          special,
         };
         nextId += 1;
         bubblesRef.current = [...bubblesRef.current, bubble];
@@ -111,7 +114,7 @@ export function BubblePop({ haptic, seconds, score, onScore, onEnd }: GamePlayPr
     const time = Date.now();
     comboRef.current = time - lastPop.current <= 900 ? comboRef.current + 1 : 1;
     lastPop.current = time;
-    scoreRef.current += bubblePoints(comboRef.current);
+    scoreRef.current += bubblePoints(comboRef.current, bubble.special);
     setCombo(comboRef.current);
     onScoreRef.current(scoreRef.current);
     setBubbles([...bubblesRef.current]);
@@ -138,7 +141,7 @@ export function BubblePop({ haptic, seconds, score, onScore, onEnd }: GamePlayPr
     <GameFrame colors={GAME_VISUAL.bubble.colors} title="バブルポップ" meta={`${formatClock(seconds)}  ${score}点`} onEnd={onEnd}>
       <View style={{ flex: 1 }}>
         <Text style={{ color: 'rgba(255,255,255,0.86)', fontSize: 16, textAlign: 'center' }}>
-          {combo > 1 ? `${combo}連続` : '泡が上に着く前に割ろう'}
+          {combo > 1 ? `${combo}連続` : '金色の泡は3倍。上に着く前に割ろう'}
         </Text>
         <View
           accessibilityLabel="泡のフィールド"

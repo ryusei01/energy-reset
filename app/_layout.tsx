@@ -17,7 +17,7 @@ export default function RootLayout() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="game/[id]" options={{ headerShown: true, title: 'リカバリーゲーム' }} />
-      <Stack.Screen name="check-in" options={{ headerShown: true, title: '体調チェック' }} />
+      <Stack.Screen name="check-in" options={{ headerShown: true, title: '日ごとの体調' }} />
       <Stack.Screen name="sleep" options={{ headerShown: true, title: '睡眠記録' }} />
       <Stack.Screen name="settings" options={{ headerShown: true, title: '設定' }} />
     </Stack>

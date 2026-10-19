@@ -63,7 +63,7 @@ export default function SettingsScreen() {
       </Card>
       <Card>
         <Text style={styles.label}>バックアップ</Text>
-        <Text style={styles.muted}>体調、ゲーム、タスク、XP、睡眠、設定をJSONで書き出します。読み込むと今の記録を置き換えます。</Text>
+        <Text style={styles.muted}>日ごとの体調、ゲーム、タスク、XP、睡眠、仲間、設定をJSONで書き出します。読み込むと今の記録を置き換えます。</Text>
         <Button title="書き出して共有" disabled={busy} onPress={async () => {
           setBusy(true);
           try {

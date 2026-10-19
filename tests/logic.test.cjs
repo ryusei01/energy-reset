@@ -6,4 +6,5 @@ test('game definitions and scoring helpers exist',()=>{
  for(const id of ['breath','bubble','rhythm','quest'])assert.ok(source.includes(`'${id}'`));
  assert.ok(source.includes('function recommend'));
  assert.ok(source.includes('function delta'));
+ assert.ok(source.includes('function xpProgress'));
 });

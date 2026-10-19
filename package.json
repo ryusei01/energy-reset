@@ -9,7 +9,7 @@
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-strip-types --test tests/logic.test.cjs tests/play.test.ts",
     "ios": "expo run:ios",
-    "android:apk": "expo prebuild --platform android --no-install && cd android && gradlew.bat assembleRelease && cd .. && node scripts/copy-apk.cjs"
+    "android:apk": "expo prebuild --platform android --no-install --non-interactive && node scripts/build-apk.cjs"
   },
   "dependencies": {
     "expo": "~54.0.0",

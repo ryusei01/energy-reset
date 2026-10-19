@@ -68,6 +68,7 @@ export function BreathGarden({ sound, haptic, seconds, score, onScore, onEnd }: 
         <Text style={{ color: 'white', fontSize: 36, fontWeight: '800', marginTop: 28 }}>{phase.name === 'inhale' ? '吸う' : '吐く'}</Text>
         <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 16, marginTop: 8 }}>{phase.name === 'inhale' ? '約4秒' : '約6秒'}　苦しくない速さで</Text>
         <Text style={{ color: 'rgba(255,255,255,0.65)', fontSize: 13, marginTop: 6 }}>息を止める必要はありません</Text>
+        <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 15, marginTop: 10 }}>{plants === 0 ? '呼吸のたびに庭が増えます' : `庭が ${plants} 本育ちました`}</Text>
       </View>
       <View style={{ minHeight: 72, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', gap: 6 }}>
         {Array.from({ length: plants }, (_, index) => <MiniPlant key={index} index={index} />)}

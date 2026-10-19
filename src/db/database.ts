@@ -1,6 +1,7 @@
 import * as SQLite from 'expo-sqlite';
 import type { Condition, GameId } from '../lib/games';
-import type { BackupPayload, ConditionRow, SessionRow, SettingRow, SleepRow, TaskRow, XpRow } from '../lib/backup';
+import type { BackupPayload, ConditionRow, DailyConditionRow, SessionRow, SettingRow, SleepRow, TaskRow, XpRow } from '../lib/backup';
+import { checkInStreak, formatDate, parseCompanionKind, type CompanionKind } from '../lib/play';
 
 let database: SQLite.SQLiteDatabase | null = null;
 let dbInit: Promise<SQLite.SQLiteDatabase> | null = null;
@@ -29,6 +30,8 @@ export type RecentPlay = {
   ended_at: string;
 };
 export type SleepLog = { id: number; date: string; minutes: number | null; early_awake: number };
+export type DailyCondition = Condition & { id: number; date: string; recorded_at: string };
+export type TodayActivity = { checkedIn: boolean; playedGame: boolean; didTask: boolean; streak: number };
 export type OpenTask = { id: number; title: string };
 
 async function openDb() {
@@ -39,6 +42,7 @@ async function openDb() {
     CREATE TABLE IF NOT EXISTS tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, done INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS xp_events (id INTEGER PRIMARY KEY AUTOINCREMENT, source TEXT NOT NULL UNIQUE, points INTEGER NOT NULL, created_at TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS sleep_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL UNIQUE, minutes INTEGER, early_awake INTEGER NOT NULL DEFAULT 0);
+    CREATE TABLE IF NOT EXISTS daily_conditions (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL UNIQUE, sleepiness INTEGER NOT NULL, fatigue INTEGER NOT NULL, mood INTEGER NOT NULL, stress INTEGER NOT NULL, recorded_at TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);`);
   database = conn;
   return conn;
@@ -109,6 +113,7 @@ export async function endSession(id: number, after: Condition, score: number) {
   const afterId = await logCondition(after);
   await conn.runAsync('UPDATE game_sessions SET after_id=?,ended_at=?,score=? WHERE id=? AND ended_at IS NULL', afterId, new Date().toISOString(), score, id);
   await addXp(`session:${id}`, 15);
+  await addXp(`daily-play:${formatDate(new Date())}`, 5);
 }
 
 export async function addXp(source: string, points: number) {
@@ -201,6 +206,55 @@ export async function getSleep(date: string) {
   return conn.getFirstAsync<SleepLog>('SELECT id, date, minutes, early_awake FROM sleep_logs WHERE date=?', date);
 }
 
+export async function saveDailyCondition(entry: { date: string } & Condition) {
+  const conn = await db();
+  await conn.runAsync(
+    `INSERT INTO daily_conditions(date, sleepiness, fatigue, mood, stress, recorded_at) VALUES(?,?,?,?,?,?)
+     ON CONFLICT(date) DO UPDATE SET sleepiness=excluded.sleepiness, fatigue=excluded.fatigue, mood=excluded.mood, stress=excluded.stress, recorded_at=excluded.recorded_at`,
+    entry.date,
+    entry.sleepiness,
+    entry.fatigue,
+    entry.mood,
+    entry.stress,
+    new Date().toISOString(),
+  );
+  await addXp(`daily-checkin:${entry.date}`, 10);
+}
+
+export async function getDailyCondition(date: string) {
+  const conn = await db();
+  return conn.getFirstAsync<DailyCondition>('SELECT id, date, sleepiness, fatigue, mood, stress, recorded_at FROM daily_conditions WHERE date=?', date);
+}
+
+export async function getRecentDailyConditions(limit = 14) {
+  const conn = await db();
+  return conn.getAllAsync<DailyCondition>('SELECT id, date, sleepiness, fatigue, mood, stress, recorded_at FROM daily_conditions ORDER BY date DESC LIMIT ?', limit);
+}
+
+export async function getCompanionKind() {
+  return parseCompanionKind(await getSetting('companionKind'));
+}
+
+export async function setCompanionKind(kind: CompanionKind) {
+  await setSetting('companionKind', kind);
+}
+
+export async function getTodayActivity(date: string): Promise<TodayActivity> {
+  const conn = await db();
+  const [daily, game, task, dates] = await Promise.all([
+    conn.getFirstAsync<{ n: number }>('SELECT COUNT(*) AS n FROM daily_conditions WHERE date=?', date),
+    conn.getFirstAsync<{ n: number }>('SELECT COUNT(*) AS n FROM game_sessions WHERE date(started_at, \'localtime\')=?', date),
+    conn.getFirstAsync<{ n: number }>('SELECT COUNT(*) AS n FROM xp_events WHERE source LIKE \'task-done:%\' AND date(created_at, \'localtime\')=?', date),
+    conn.getAllAsync<{ date: string }>('SELECT date FROM daily_conditions ORDER BY date DESC LIMIT 60'),
+  ]);
+  return {
+    checkedIn: (daily?.n ?? 0) > 0,
+    playedGame: (game?.n ?? 0) > 0,
+    didTask: (task?.n ?? 0) > 0,
+    streak: checkInStreak(dates.map(row => row.date), date),
+  };
+}
+
 export async function getRecentSleep() {
   const conn = await db();
   return conn.getAllAsync<SleepLog>('SELECT id, date, minutes, early_awake FROM sleep_logs ORDER BY date DESC LIMIT 7');
@@ -208,18 +262,19 @@ export async function getRecentSleep() {
 
 export async function exportSnapshot(): Promise<BackupPayload> {
   const conn = await db();
-  const [condition_logs, game_sessions, tasks, xp_events, sleep_logs, settings] = await Promise.all([
+  const [condition_logs, game_sessions, tasks, xp_events, sleep_logs, daily_conditions, settings] = await Promise.all([
     conn.getAllAsync<ConditionRow>('SELECT id, sleepiness, fatigue, mood, stress, recorded_at FROM condition_logs ORDER BY id'),
     conn.getAllAsync<SessionRow>('SELECT id, game_id, before_id, after_id, started_at, ended_at, score FROM game_sessions ORDER BY id'),
     conn.getAllAsync<TaskRow>('SELECT id, title, done, created_at FROM tasks ORDER BY id'),
     conn.getAllAsync<XpRow>('SELECT id, source, points, created_at FROM xp_events ORDER BY id'),
     conn.getAllAsync<SleepRow>('SELECT id, date, minutes, early_awake FROM sleep_logs ORDER BY id'),
+    conn.getAllAsync<DailyConditionRow>('SELECT id, date, sleepiness, fatigue, mood, stress, recorded_at FROM daily_conditions ORDER BY id'),
     conn.getAllAsync<SettingRow>('SELECT key, value FROM settings ORDER BY key'),
   ]);
   return {
     version: 1,
     exportedAt: new Date().toISOString(),
-    tables: { condition_logs, game_sessions, tasks, xp_events, sleep_logs, settings },
+    tables: { condition_logs, game_sessions, tasks, xp_events, sleep_logs, daily_conditions, settings },
   };
 }
 
@@ -227,7 +282,7 @@ export async function replaceFromBackup(payload: BackupPayload) {
   const conn = await db();
   const { tables } = payload;
   await conn.withTransactionAsync(async () => {
-    await conn.execAsync('DELETE FROM game_sessions; DELETE FROM condition_logs; DELETE FROM tasks; DELETE FROM xp_events; DELETE FROM sleep_logs; DELETE FROM settings;');
+    await conn.execAsync('DELETE FROM game_sessions; DELETE FROM condition_logs; DELETE FROM tasks; DELETE FROM xp_events; DELETE FROM sleep_logs; DELETE FROM daily_conditions; DELETE FROM settings;');
     for (const row of tables.condition_logs) {
       await conn.runAsync('INSERT INTO condition_logs(id, sleepiness, fatigue, mood, stress, recorded_at) VALUES(?,?,?,?,?,?)', row.id, row.sleepiness, row.fatigue, row.mood, row.stress, row.recorded_at);
     }
@@ -242,6 +297,9 @@ export async function replaceFromBackup(payload: BackupPayload) {
     }
     for (const row of tables.sleep_logs) {
       await conn.runAsync('INSERT INTO sleep_logs(id, date, minutes, early_awake) VALUES(?,?,?,?)', row.id, row.date, row.minutes, row.early_awake);
+    }
+    for (const row of tables.daily_conditions ?? []) {
+      await conn.runAsync('INSERT INTO daily_conditions(id, date, sleepiness, fatigue, mood, stress, recorded_at) VALUES(?,?,?,?,?,?,?)', row.id, row.date, row.sleepiness, row.fatigue, row.mood, row.stress, row.recorded_at);
     }
     for (const row of tables.settings) {
       await conn.runAsync('INSERT INTO settings(key, value) VALUES(?,?)', row.key, row.value);
