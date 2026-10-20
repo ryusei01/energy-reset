@@ -69,7 +69,7 @@ export function SmallQuest({ haptic, onScore, onEnd }: GamePlayProps) {
   const growth = xpProgress(xp);
   return (
     <GameFrame colors={GAME_VISUAL.quest.colors} title="スモールクエスト" meta={done ? '達成' : choice ? formatClock(left) : '選択'} endLabel={done ? '体調を記録する' : '終了して記録'} onEnd={onEnd}>
-      <ScrollView contentContainerStyle={{ alignItems: 'center', paddingBottom: 12 }}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ alignItems: 'center', paddingBottom: 12 }}>
         <Companion kind={kind} level={growth.level} size={120} light progress={growth.ratio} />
         {!choice && <Text style={{ color: 'rgba(255,255,255,0.86)', textAlign: 'center', marginBottom: 12 }}>今できる行動を一つ選ぶ。2分たったら達成を記録できる。</Text>}
         {choice && (

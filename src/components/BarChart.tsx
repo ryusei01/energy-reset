@@ -7,7 +7,7 @@ export function BarChart({ rows }: { rows: { label: string; value: number }[] })
   return (
     <View style={{ gap: 10 }}>
       {rows.map(row => {
-        const width = `${Math.max(6, (Math.abs(row.value) / max) * 100)}%` as const;
+        const width = row.value === 0 ? '0%' : `${Math.max(8, (Math.abs(row.value) / max) * 100)}%` as const;
         const positive = row.value >= 0;
         return (
           <View key={row.label}>

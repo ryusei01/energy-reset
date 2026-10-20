@@ -79,7 +79,7 @@ export function RhythmReset({ sound, haptic, seconds, score, onScore, onEnd }: G
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
         <Text style={{ color: 'rgba(255,255,255,0.75)', fontSize: 15, marginBottom: 18 }}>リングが真ん中に重なったらタップ　拍 {beat}{combo > 1 ? `　${combo}連続` : ''}</Text>
         <View style={{ width: 230, height: 230, alignItems: 'center', justifyContent: 'center' }}>
-          <Animated.View style={{ position: 'absolute', width: 150, height: 150, borderRadius: 75, borderWidth: 4, borderColor: 'rgba(212,196,255,0.95)', transform: [{ scale }] }} />
+          <Animated.View pointerEvents="none" style={{ position: 'absolute', width: 150, height: 150, left: 40, top: 40, borderRadius: 75, borderWidth: 4, borderColor: 'rgba(212,196,255,0.95)', transform: [{ scale }] }} />
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="拍に合わせてタップ"

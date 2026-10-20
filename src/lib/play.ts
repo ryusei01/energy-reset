@@ -185,6 +185,13 @@ export function formatShortDate(iso: string) {
   return `${Number(match[2])}/${Number(match[3])}`;
 }
 
+export function clockPart(value: string | null | undefined, fallback: number, max: number) {
+  if (value == null || value.trim() === '') return fallback;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0 || parsed > max) return fallback;
+  return parsed;
+}
+
 export function shiftDate(iso: string, days: number) {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
   if (!match) return iso;

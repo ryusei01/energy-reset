@@ -19,6 +19,7 @@ import {
   parseCompanionKind,
   RHYTHM_BEAT_MS,
   rhythmScore,
+  clockPart,
   shiftDate,
   sleepMinutes,
 } from '../src/lib/play.ts';
@@ -61,6 +62,14 @@ test('bubble combo and spawn pace stay bounded', () => {
   assert.equal(bubbleTop(1000, 1000, 400, 50), -50);
   assert.equal(bubbleContains(10, 10, 0, 0, 40), true);
   assert.equal(bubbleContains(80, 10, 0, 0, 40), false);
+});
+
+test('missing reminder clock falls back instead of becoming midnight', () => {
+  assert.equal(clockPart(null, 21, 23), 21);
+  assert.equal(clockPart(undefined, 21, 23), 21);
+  assert.equal(clockPart('', 0, 59), 0);
+  assert.equal(clockPart('0', 21, 23), 0);
+  assert.equal(clockPart('24', 21, 23), 21);
 });
 
 test('companion stages follow level', () => {

@@ -56,7 +56,7 @@ export function BubblePop({ haptic, seconds, score, onScore, onEnd }: GamePlayPr
       if (!alive) return;
       const time = Date.now();
       const height = heightRef.current;
-      const staying = bubblesRef.current.filter(bubble => bubble.popped || bubbleTop(time - bubble.born, bubble.duration, height, bubble.size) + bubble.size >= 0);
+      const staying = bubblesRef.current.filter(bubble => bubble.popped || bubbleTop(time - bubble.born, bubble.duration, height, bubble.size) + bubble.size > 0);
       if (staying.length !== bubblesRef.current.length) {
         bubblesRef.current = staying;
         setBubbles(staying);

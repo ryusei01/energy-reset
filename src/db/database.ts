@@ -1,7 +1,7 @@
 import * as SQLite from 'expo-sqlite';
 import type { Condition, GameId } from '../lib/games';
 import type { BackupPayload, ConditionRow, DailyConditionRow, SessionRow, SettingRow, SleepRow, TaskRow, XpRow } from '../lib/backup';
-import { checkInStreak, formatDate, parseCompanionKind, type CompanionKind } from '../lib/play';
+import { checkInStreak, clockPart, formatDate, parseCompanionKind, type CompanionKind } from '../lib/play';
 
 let database: SQLite.SQLiteDatabase | null = null;
 let dbInit: Promise<SQLite.SQLiteDatabase> | null = null;
@@ -52,12 +52,6 @@ export async function db() {
   if (database) return database;
   if (!dbInit) dbInit = openDb();
   return dbInit;
-}
-
-function clockPart(value: string | null, fallback: number, max: number) {
-  const parsed = Number(value);
-  if (!Number.isInteger(parsed) || parsed < 0 || parsed > max) return fallback;
-  return parsed;
 }
 
 export async function getSetting(key: string) {
