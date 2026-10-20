@@ -6,7 +6,7 @@ import { Companion, GrowthTrack } from '../../src/components/Companion';
 import { Card, ProgressBar, Title, styles } from '../../src/components/UI';
 import { getCompanionKind, getInsights, getRecentDailyConditions, getRecentPlays, getXp, type DailyCondition, type Insight, type RecentPlay } from '../../src/db/database';
 import { GAMES, xpProgress } from '../../src/lib/games';
-import { companionHint, companionStage, companionStageLabel, formatShortDate, type CompanionKind } from '../../src/lib/play';
+import { formatShortDate, growthLabel, nextGrowthHint, type CompanionKind } from '../../src/lib/play';
 
 function signed(value: number) {
   return `${value > 0 ? '+' : ''}${value}`;
@@ -36,10 +36,10 @@ export default function Insights() {
         <View style={{ alignItems: 'center' }}>
           <Companion kind={kind} level={growth.level} progress={growth.ratio} size={132} />
         </View>
-        <GrowthTrack kind={kind} level={growth.level} />
-        <ProgressBar value={growth.into} max={growth.need} label={`Lv.${growth.level} ${companionStageLabel(kind, companionStage(growth.level))}　累計 ${growth.xp} XP`} />
-        <Text style={styles.text}>{companionHint(kind, growth.level, growth.remaining)}</Text>
-        <Text style={styles.muted}>同じ段階のあいだも、ゲージと大きさで伸びが見えます。</Text>
+        <GrowthTrack kind={kind} level={growth.level} ratio={growth.ratio} />
+        <ProgressBar value={growth.into} max={growth.need} label={`Lv.${growth.level} ${growthLabel(kind, growth.level, growth.ratio)}　累計 ${growth.xp} XP`} />
+        <Text style={styles.text}>{nextGrowthHint(kind, growth)}</Text>
+        <Text style={styles.muted}>各段階は3つに分かれています。印が埋まるたびに姿が変わります。</Text>
       </Card>
       {dayRows.length > 0 && (
         <Card>

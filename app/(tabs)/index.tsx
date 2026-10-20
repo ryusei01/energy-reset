@@ -3,9 +3,10 @@ import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Button, Card, ProgressBar, Title, palette, styles } from '../../src/components/UI';
 import { Companion, GrowthTrack } from '../../src/components/Companion';
+import { GrowthShare } from '../../src/components/GrowthShare';
 import { getCompanionKind, getDailyCondition, getTodayActivity, getXp, setCompanionKind, type DailyCondition, type TodayActivity } from '../../src/db/database';
 import { GAMES, recommend, xpProgress, type Condition } from '../../src/lib/games';
-import { COMPANIONS, companionHint, companionLine, companionStage, companionStageLabel, formatDate, type CompanionKind } from '../../src/lib/play';
+import { COMPANIONS, companionLine, formatDate, growthLabel, nextGrowthHint, shareCaption, type CompanionKind } from '../../src/lib/play';
 
 const emptyActivity: TodayActivity = { checkedIn: false, playedGame: false, didTask: false, streak: 0 };
 
@@ -36,18 +37,22 @@ export default function Home() {
     <ScrollView style={styles.screen}>
       <Title>Energy Reset</Title>
       <Card>
-        <View style={{ alignItems: 'center' }}>
-          <Companion level={growth.level} kind={kind} progress={growth.ratio} />
-          <Text style={styles.muted}>{companionLine(kind, todayCondition, activity.streak)}</Text>
-        </View>
-        <GrowthTrack kind={kind} level={growth.level} />
-        <ProgressBar value={growth.into} max={growth.need} label={`Lv.${growth.level} ${companionStageLabel(kind, companionStage(growth.level))}　${growth.into} / ${growth.need} XP`} />
-        <Text style={styles.text}>{companionHint(kind, growth.level, growth.remaining)}</Text>
+        <GrowthShare caption={shareCaption(kind, growth.level, growth.ratio, activity.streak)}>
+          <View style={{ alignItems: 'center' }}>
+            <Text style={styles.label}>Energy Reset</Text>
+            <Companion level={growth.level} kind={kind} progress={growth.ratio} />
+            <Text style={styles.text}>Lv.{growth.level}　{growthLabel(kind, growth.level, growth.ratio)}</Text>
+            <Text style={styles.muted}>{companionLine(kind, todayCondition, activity.streak)}</Text>
+          </View>
+          <GrowthTrack kind={kind} level={growth.level} ratio={growth.ratio} />
+        </GrowthShare>
+        <ProgressBar value={growth.into} max={growth.need} label={`Lv.${growth.level}　${growth.into} / ${growth.need} XP`} />
+        <Text style={styles.text}>{nextGrowthHint(kind, growth)}</Text>
         {activity.streak > 0 && <Text style={styles.muted}>体調の連続記録 {activity.streak}日</Text>}
       </Card>
       <Card>
         <Text style={styles.label}>仲間をえらぶ</Text>
-        <Text style={styles.muted}>花でも、ねこ・とり・きつねでも育てられます。姿はレベルで変わります。</Text>
+        <Text style={styles.muted}>花、ねこ、とり、きつねから選べます。同じ段階のなかでも、3回姿が変わります。</Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
           {COMPANIONS.map(item => {
             const active = kind === item.id;

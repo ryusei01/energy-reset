@@ -131,6 +131,81 @@ export function companionHint(kind: CompanionKind, level: number, remainingXp: n
   return `あと ${remainingXp} XP で ${companionStageLabel(kind, next)}`;
 }
 
+export type GrowthSnap = { level: number; into: number; need: number; remaining: number; ratio: number };
+
+const GROWTH_DETAIL: Record<CompanionKind, Record<CompanionStage, readonly [string, string, string]>> = {
+  flower: {
+    seed: ['種', '割れかけの種', '芽のでた種'],
+    sprout: ['芽', '双葉', '葉のついた芽'],
+    bud: ['つぼみ', 'ふくらんだつぼみ', '色づいたつぼみ'],
+    bloom: ['花', '満開', '花とつぼみ'],
+    garden: ['小さな庭', '花がふえた庭', 'にぎやかな庭'],
+  },
+  cat: {
+    seed: ['まるねこ', '目をあけたねこ', 'みみのあるねこ'],
+    sprout: ['こねこ', 'しっぽのあるこねこ', 'すわったこねこ'],
+    bud: ['ねこ', 'ひげのあるねこ', 'えがおのねこ'],
+    bloom: ['おおきなねこ', 'リボンのねこ', 'しっぽのながいねこ'],
+    garden: ['花のそばのねこ', '毛糸のねこ', 'お庭のねこ'],
+  },
+  bird: {
+    seed: ['たまご', 'ひびのたまご', 'くちばしのでたたまご'],
+    sprout: ['ひよこ', 'はねのひよこ', 'あるくひよこ'],
+    bud: ['ことり', 'はねをひろげたことり', 'さえずることり'],
+    bloom: ['とり', 'つばさのとり', 'さえずるとり'],
+    garden: ['巣のとり', 'たまごのある巣', 'にぎやかな巣'],
+  },
+  fox: {
+    seed: ['けだま', 'みみのけだま', '目をあけたけだま'],
+    sprout: ['こぎつね', 'しっぽのこぎつね', 'すわったこぎつね'],
+    bud: ['きつね', 'しっぽのきつね', 'えがおのきつね'],
+    bloom: ['おおきなきつね', 'しっぽのながいきつね', 'たてがみのきつね'],
+    garden: ['すみかのきつね', '花のそばのきつね', 'お庭のきつね'],
+  },
+};
+
+export function growthSubstep(ratio: number): 0 | 1 | 2 {
+  const value = Math.min(0.999999, Math.max(0, ratio));
+  if (value < 1 / 3) return 0;
+  if (value < 2 / 3) return 1;
+  return 2;
+}
+
+export function growthPose(level: number, ratio: number): { stage: CompanionStage; sub: 0 | 1 | 2 } {
+  const stage = companionStage(level);
+  if (stage === 'garden') return { stage, sub: Math.min(2, Math.max(0, Math.floor(level) - 5)) as 0 | 1 | 2 };
+  return { stage, sub: growthSubstep(ratio) };
+}
+
+export function growthLabel(kind: CompanionKind, level: number, ratio: number) {
+  const pose = growthPose(level, ratio);
+  return GROWTH_DETAIL[kind][pose.stage][pose.sub];
+}
+
+export function xpUntilNextMark(into: number, need: number) {
+  const safeNeed = Math.max(1, Math.floor(need));
+  const sub = growthSubstep(Math.max(0, into) / safeNeed);
+  const target = Math.ceil((safeNeed * (sub + 1)) / 3);
+  return Math.max(1, target - Math.floor(into));
+}
+
+export function nextGrowthHint(kind: CompanionKind, progress: GrowthSnap) {
+  const pose = growthPose(progress.level, progress.ratio);
+  if (pose.sub < 2) {
+    const next = GROWTH_DETAIL[kind][pose.stage][pose.sub + 1];
+    const xp = pose.stage === 'garden' ? progress.remaining : xpUntilNextMark(progress.into, progress.need);
+    return `あと ${xp} XP で ${next}`;
+  }
+  return companionHint(kind, progress.level, progress.remaining);
+}
+
+export function shareCaption(kind: CompanionKind, level: number, ratio: number, streak: number) {
+  const name = COMPANIONS.find(item => item.id === kind)?.name ?? '仲間';
+  const look = growthLabel(kind, level, ratio);
+  const days = streak > 0 ? `${streak}日つづけて記録しています` : '短いリセットを残しています';
+  return `Energy Resetの${name}は「${look}」まで育ちました。Lv.${level}。${days}`;
+}
+
 export function checkInStreak(dates: string[], today: string) {
   const recorded = new Set(dates);
   let cursor = today;

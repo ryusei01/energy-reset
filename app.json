@@ -5,6 +5,7 @@
     "scheme": "energyreset",
     "version": "0.1.0",
     "orientation": "portrait",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "plugins": [
       "expo-router",
@@ -13,7 +14,11 @@
       "expo-notifications"
     ],
     "android": {
-      "package": "com.energyreset.app"
+      "package": "com.energyreset.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#E7F6EE"
+      }
     },
     "experiments": {
       "typedRoutes": true

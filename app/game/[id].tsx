@@ -10,7 +10,7 @@ import { BubblePop } from '../../src/components/games/BubblePop';
 import { RhythmReset } from '../../src/components/games/RhythmReset';
 import { SmallQuest } from '../../src/components/games/SmallQuest';
 import { GAMES, type Condition, type GameId, delta, xpProgress } from '../../src/lib/games';
-import { companionStage, companionStageLabel, formatDate, type CompanionKind } from '../../src/lib/play';
+import { formatDate, growthLabel, type CompanionKind } from '../../src/lib/play';
 import { endSession, getCompanionKind, getDailyCondition, getLatestConditionLog, getPlayPrefs, getXp, saveDailyCondition, startSession, type PlayPrefs } from '../../src/db/database';
 
 const initial: Condition = { sleepiness: 5, fatigue: 5, mood: 5, stress: 5 };
@@ -202,7 +202,7 @@ export default function GameScreen() {
         <Card>
           <Text style={styles.label}>プレイ完了</Text>
           <Companion kind={kind} level={growth.level} progress={growth.ratio} size={140} />
-          <ProgressBar value={growth.into} max={growth.need} label={`Lv.${growth.level} ${companionStageLabel(kind, companionStage(growth.level))}　${growth.into} / ${growth.need} XP`} />
+          <ProgressBar value={growth.into} max={growth.need} label={`Lv.${growth.level} ${growthLabel(kind, growth.level, growth.ratio)}　${growth.into} / ${growth.need} XP`} />
           <Text style={styles.text}>スコア：{score}　セッションXP：15　その日の初回プレイ：+5{game.id === 'quest' && score > 0 ? '　クエスト達成XP：20' : ''}</Text>
           <Text style={styles.text}>眠気の改善：{change.sleepiness}　だるさの改善：{change.fatigue}</Text>
           <Text style={styles.text}>気分の変化：{change.mood}　ストレスの改善：{change.stress}</Text>

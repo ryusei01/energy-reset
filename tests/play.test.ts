@@ -11,6 +11,11 @@ import {
   checkInStreak,
   companionHint,
   companionStage,
+  growthLabel,
+  growthPose,
+  growthSubstep,
+  nextGrowthHint,
+  xpUntilNextMark,
   companionStageLabel,
   formatShortDate,
   isSpecialBubble,
@@ -79,6 +84,22 @@ test('companion stages follow level', () => {
   assert.equal(parseCompanionKind('fox'), 'fox');
   assert.equal(parseCompanionKind('dragon'), 'flower');
   assert.equal(companionHint('flower', 3, 120), 'あと 120 XP で 花');
+});
+
+test('each stage has three looks and the garden does not shrink', () => {
+  assert.equal(growthSubstep(0), 0);
+  assert.equal(growthSubstep(0.34), 1);
+  assert.equal(growthSubstep(0.8), 2);
+  assert.deepEqual(growthPose(1, 0.5), { stage: 'seed', sub: 1 });
+  assert.equal(growthLabel('flower', 1, 0.5), '割れかけの種');
+  assert.equal(growthLabel('cat', 2, 0), 'こねこ');
+  assert.deepEqual(growthPose(5, 0.9), { stage: 'garden', sub: 0 });
+  assert.deepEqual(growthPose(6, 0), { stage: 'garden', sub: 1 });
+  assert.deepEqual(growthPose(8, 0), { stage: 'garden', sub: 2 });
+  assert.equal(xpUntilNextMark(0, 100), 34);
+  assert.equal(xpUntilNextMark(40, 100), 27);
+  assert.equal(nextGrowthHint('flower', xpProgress(0)), 'あと 34 XP で 割れかけの種');
+  assert.equal(nextGrowthHint('flower', xpProgress(80)), 'あと 20 XP で 芽');
 });
 
 test('xp progress makes the next level visible', () => {
