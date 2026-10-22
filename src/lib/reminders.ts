@@ -30,7 +30,7 @@ export async function syncReminder(enabled: boolean, hour: number, minute: numbe
   await Notifications.scheduleNotificationAsync({
     content: {
       title: 'Energy Reset',
-      body: '今の体調を記録して、必要なら短いリセットを',
+      body: '短いリセットからで大丈夫です。体調は任意で残せます',
     },
     trigger: {
       type: Notifications.SchedulableTriggerInputTypes.DAILY,

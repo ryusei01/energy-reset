@@ -223,11 +223,11 @@ export function checkInStreak(dates: string[], today: string) {
 
 export function companionLine(kind: CompanionKind, condition: Condition | null, streak: number) {
   const name = COMPANIONS.find(item => item.id === kind)?.name ?? '仲間';
-  if (!condition) return `${name}は、今日の体調が残るのを待っています`;
   if (streak >= 3) return `${name}と${streak}日続いています。ペースはそのままで大丈夫です`;
+  if (!condition) return `${name}は、今日もそばにいます`;
   if (condition.sleepiness >= 8 || condition.fatigue >= 8) return `${name}も、今日は静かにそばにいます`;
   if (condition.stress >= 7) return `${name}と、ゆっくり呼吸してみましょう`;
-  if (condition.mood <= 4) return `${name}は、小さな遊びからでいいよ、と待っています`;
+  if (condition.mood <= 4) return `${name}は、小さな遊びからでいいよ、と見守っています`;
   return `${name}は、今日の庭を見守っています`;
 }
 

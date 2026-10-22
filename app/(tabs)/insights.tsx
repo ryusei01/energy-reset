@@ -64,14 +64,20 @@ export default function Insights() {
         <Card key={row.game_id}>
           <Text style={styles.label}>{GAMES.find(game => game.id === row.game_id)?.name ?? row.game_id}</Text>
           <Text style={styles.text}>プレイ回数：{row.plays}</Text>
-          <BarChart rows={[
-            { label: '眠気', value: row.sleepiness_delta },
-            { label: 'だるさ', value: row.fatigue_delta },
-            { label: '気分', value: row.mood_delta },
-            { label: 'ストレス', value: row.stress_delta },
-          ]} />
-          <Text style={styles.muted}>プラスはプレイ後に自己評価が改善した方向です（眠気 {signed(row.sleepiness_delta)} / 気分 {signed(row.mood_delta)}）</Text>
-          {row.plays < 5 && <Text style={styles.muted}>データが少ないため参考値です</Text>}
+          {row.mood_delta == null ? (
+            <Text style={styles.muted}>体調つきの前後記録がないため、変化はまだありません。</Text>
+          ) : (
+            <>
+              <BarChart rows={[
+                { label: '眠気', value: row.sleepiness_delta ?? 0 },
+                { label: 'だるさ', value: row.fatigue_delta ?? 0 },
+                { label: '気分', value: row.mood_delta },
+                { label: 'ストレス', value: row.stress_delta ?? 0 },
+              ]} />
+              <Text style={styles.muted}>プラスはプレイ後に自己評価が改善した方向です（眠気 {signed(row.sleepiness_delta ?? 0)} / 気分 {signed(row.mood_delta)}）</Text>
+              {row.plays < 5 && <Text style={styles.muted}>データが少ないため参考値です</Text>}
+            </>
+          )}
         </Card>
       ))}
     </ScrollView>
