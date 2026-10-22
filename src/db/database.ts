@@ -17,10 +17,10 @@ export type PlayPrefs = {
 export type Insight = {
   game_id: string;
   plays: number;
-  sleepiness_delta: number;
-  fatigue_delta: number;
-  mood_delta: number;
-  stress_delta: number;
+  sleepiness_delta: number | null;
+  fatigue_delta: number | null;
+  mood_delta: number | null;
+  stress_delta: number | null;
 };
 export type RecentPlay = {
   game_id: string;
@@ -34,16 +34,28 @@ export type DailyCondition = Condition & { id: number; date: string; recorded_at
 export type TodayActivity = { checkedIn: boolean; playedGame: boolean; didTask: boolean; streak: number };
 export type OpenTask = { id: number; title: string };
 
+async function migrateGameSessions(conn: SQLite.SQLiteDatabase) {
+  const cols = await conn.getAllAsync<{ name: string; notnull: number }>('PRAGMA table_info(game_sessions)');
+  if (cols.find(col => col.name === 'before_id')?.notnull !== 1) return;
+  await conn.execAsync(`PRAGMA foreign_keys=OFF;
+    CREATE TABLE game_sessions_new (id INTEGER PRIMARY KEY AUTOINCREMENT, game_id TEXT NOT NULL, before_id INTEGER, after_id INTEGER, started_at TEXT NOT NULL, ended_at TEXT, score INTEGER NOT NULL DEFAULT 0, FOREIGN KEY(before_id) REFERENCES condition_logs(id), FOREIGN KEY(after_id) REFERENCES condition_logs(id));
+    INSERT INTO game_sessions_new(id, game_id, before_id, after_id, started_at, ended_at, score) SELECT id, game_id, before_id, after_id, started_at, ended_at, score FROM game_sessions;
+    DROP TABLE game_sessions;
+    ALTER TABLE game_sessions_new RENAME TO game_sessions;
+    PRAGMA foreign_keys=ON;`);
+}
+
 async function openDb() {
   const conn = await SQLite.openDatabaseAsync('energy-reset.db');
   await conn.execAsync(`PRAGMA journal_mode = WAL;
     CREATE TABLE IF NOT EXISTS condition_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, sleepiness INTEGER NOT NULL, fatigue INTEGER NOT NULL, mood INTEGER NOT NULL, stress INTEGER NOT NULL, recorded_at TEXT NOT NULL);
-    CREATE TABLE IF NOT EXISTS game_sessions (id INTEGER PRIMARY KEY AUTOINCREMENT, game_id TEXT NOT NULL, before_id INTEGER NOT NULL, after_id INTEGER, started_at TEXT NOT NULL, ended_at TEXT, score INTEGER NOT NULL DEFAULT 0, FOREIGN KEY(before_id) REFERENCES condition_logs(id), FOREIGN KEY(after_id) REFERENCES condition_logs(id));
+    CREATE TABLE IF NOT EXISTS game_sessions (id INTEGER PRIMARY KEY AUTOINCREMENT, game_id TEXT NOT NULL, before_id INTEGER, after_id INTEGER, started_at TEXT NOT NULL, ended_at TEXT, score INTEGER NOT NULL DEFAULT 0, FOREIGN KEY(before_id) REFERENCES condition_logs(id), FOREIGN KEY(after_id) REFERENCES condition_logs(id));
     CREATE TABLE IF NOT EXISTS tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, done INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS xp_events (id INTEGER PRIMARY KEY AUTOINCREMENT, source TEXT NOT NULL UNIQUE, points INTEGER NOT NULL, created_at TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS sleep_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL UNIQUE, minutes INTEGER, early_awake INTEGER NOT NULL DEFAULT 0);
     CREATE TABLE IF NOT EXISTS daily_conditions (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL UNIQUE, sleepiness INTEGER NOT NULL, fatigue INTEGER NOT NULL, mood INTEGER NOT NULL, stress INTEGER NOT NULL, recorded_at TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);`);
+  await migrateGameSessions(conn);
   database = conn;
   return conn;
 }
@@ -90,21 +102,18 @@ export async function logCondition(c: Condition) {
   return id;
 }
 
-export async function startSession(game: GameId, before: Condition, opts?: { beforeLogId?: number }) {
+export async function startSession(game: GameId, before?: Condition | null) {
   const conn = await db();
-  let beforeId = opts?.beforeLogId;
-  if (beforeId == null) beforeId = await logCondition(before);
-  beforeId = Number(beforeId);
-  if (!Number.isFinite(beforeId) || beforeId <= 0) throw new Error('invalid before condition id');
+  const beforeId = before ? await logCondition(before) : null;
   const r = await conn.runAsync('INSERT INTO game_sessions(game_id,before_id,started_at,score) VALUES(?,?,?,?)', game, beforeId, new Date().toISOString(), 0);
   const sessionId = Number(r.lastInsertRowId);
   if (!Number.isFinite(sessionId) || sessionId <= 0) throw new Error('game session insert failed');
   return sessionId;
 }
 
-export async function endSession(id: number, after: Condition, score: number) {
+export async function endSession(id: number, after: Condition | null, score: number) {
   const conn = await db();
-  const afterId = await logCondition(after);
+  const afterId = after ? await logCondition(after) : null;
   await conn.runAsync('UPDATE game_sessions SET after_id=?,ended_at=?,score=? WHERE id=? AND ended_at IS NULL', afterId, new Date().toISOString(), score, id);
   await addXp(`session:${id}`, 15);
   await addXp(`daily-play:${formatDate(new Date())}`, 5);
@@ -135,13 +144,14 @@ export async function getLatestCondition() {
 export async function getInsights() {
   const conn = await db();
   return conn.getAllAsync<Insight>(`SELECT s.game_id, COUNT(*) AS plays,
-    ROUND(AVG(b.sleepiness - a.sleepiness), 2) AS sleepiness_delta,
-    ROUND(AVG(b.fatigue - a.fatigue), 2) AS fatigue_delta,
-    ROUND(AVG(a.mood - b.mood), 2) AS mood_delta,
-    ROUND(AVG(b.stress - a.stress), 2) AS stress_delta
+    ROUND(AVG(CASE WHEN b.id IS NOT NULL AND a.id IS NOT NULL THEN b.sleepiness - a.sleepiness END), 2) AS sleepiness_delta,
+    ROUND(AVG(CASE WHEN b.id IS NOT NULL AND a.id IS NOT NULL THEN b.fatigue - a.fatigue END), 2) AS fatigue_delta,
+    ROUND(AVG(CASE WHEN b.id IS NOT NULL AND a.id IS NOT NULL THEN a.mood - b.mood END), 2) AS mood_delta,
+    ROUND(AVG(CASE WHEN b.id IS NOT NULL AND a.id IS NOT NULL THEN b.stress - a.stress END), 2) AS stress_delta
     FROM game_sessions s
-    JOIN condition_logs b ON b.id = s.before_id
-    JOIN condition_logs a ON a.id = s.after_id
+    LEFT JOIN condition_logs b ON b.id = s.before_id
+    LEFT JOIN condition_logs a ON a.id = s.after_id
+    WHERE s.ended_at IS NOT NULL
     GROUP BY s.game_id
     ORDER BY plays DESC`);
 }

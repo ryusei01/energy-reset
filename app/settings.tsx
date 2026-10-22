@@ -47,7 +47,7 @@ export default function SettingsScreen() {
       </Card>
       <Card>
         <Text style={styles.label}>毎日のリマインダー</Text>
-        <Text style={styles.muted}>体調を記録する時刻を、1日1回知らせます。</Text>
+        <Text style={styles.muted}>短いリセットを思い出す時刻を、1日1回知らせます。体調入力は任意です。</Text>
         <SwitchRow label="通知" value={prefs.reminder} onPress={() => applyReminder({ ...prefs, reminder: !prefs.reminder }, true).catch(error => {
           console.error(error);
           Alert.alert('エラー', '通知を設定できませんでした');

@@ -25,7 +25,7 @@ export default function Home() {
     getTodayActivity(today).then(setActivity).catch(console.error);
   }, [today]));
 
-  const suggestion = condition ? recommend(condition) : null;
+  const suggestion = condition ? recommend(condition) : 'quest';
   const growth = xpProgress(xp);
   const todayCondition: Condition | null = condition;
   const choose = async (next: CompanionKind) => {
@@ -75,7 +75,7 @@ export default function Home() {
       <Card>
         <Text style={styles.label}>今日のリセット</Text>
         {[
-          { done: activity.checkedIn, label: '体調を残す' },
+          { done: activity.checkedIn, label: '体調を残す（任意）' },
           { done: activity.playedGame, label: 'ゲームを1回' },
           { done: activity.didTask, label: '小さな一歩' },
         ].map(item => (
@@ -95,15 +95,15 @@ export default function Home() {
         {condition ? (
           <Text style={styles.text}>眠気 {condition.sleepiness}　だるさ {condition.fatigue}　気分 {condition.mood}　ストレス {condition.stress}</Text>
         ) : (
-          <Text style={styles.muted}>今日はまだ残していません。昨日以前の記録とは別に、日付ごとに残せます。</Text>
+          <Text style={styles.muted}>今日はまだ残していません。任意です。昨日以前の記録とは別に、日付ごとに残せます。</Text>
         )}
         <Button title={condition ? '今日の体調を見直す' : '体調を記録'} onPress={() => router.push('/check-in')} />
         <Button secondary title="睡眠を記録" onPress={() => router.push('/sleep')} />
       </Card>
       <Card>
         <Text style={styles.label}>おすすめ</Text>
-        <Text style={styles.text}>{!condition ? '今日の体調を残すとおすすめが表示されます' : suggestion === 'rest' ? '眠気・だるさが強めです。ゲームより休息を優先しましょう。' : GAMES.find(item => item.id === suggestion)?.name}</Text>
-        {suggestion && suggestion !== 'rest' && <Button title="ゲームを始める" onPress={() => router.push(`/game/${suggestion}`)} />}
+        <Text style={styles.text}>{!condition ? '体調がなくても遊べます。おすすめはスモールクエストです。' : suggestion === 'rest' ? '眠気・だるさが強めです。ゲームより休息を優先しましょう。' : GAMES.find(item => item.id === suggestion)?.name}</Text>
+        {suggestion !== 'rest' && <Button title="ゲームを始める" onPress={() => router.push(`/game/${suggestion}`)} />}
         <Button secondary title="ゲーム一覧へ" onPress={() => router.push('/(tabs)/games')} />
       </Card>
       <Button secondary title="設定とバックアップ" onPress={() => router.push('/settings')} />

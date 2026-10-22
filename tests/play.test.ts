@@ -10,6 +10,7 @@ import {
   bubbleTop,
   checkInStreak,
   companionHint,
+  companionLine,
   companionStage,
   growthLabel,
   growthPose,
@@ -113,6 +114,12 @@ test('xp progress makes the next level visible', () => {
   assert.equal(xpProgress(100).remaining, 300);
 });
 
+test('companion does not wait for an optional condition', () => {
+  assert.equal(companionLine('flower', null, 0), '花は、今日もそばにいます');
+  assert.equal(companionLine('cat', null, 3), 'ねこと3日続いています。ペースはそのままで大丈夫です');
+  assert.equal(companionLine('fox', { sleepiness: 3, fatigue: 3, mood: 3, stress: 3 }, 0), 'きつねは、小さな遊びからでいいよ、と見守っています');
+});
+
 test('check-in streaks count consecutive days and allow yesterday', () => {
   assert.equal(checkInStreak(['2026-10-19', '2026-10-18', '2026-10-17'], '2026-10-19'), 3);
   assert.equal(checkInStreak(['2026-10-18', '2026-10-17'], '2026-10-19'), 2);
@@ -150,6 +157,14 @@ test('backup parser accepts a complete file and rejects a broken one', () => {
   };
   assert.equal(parseBackup(JSON.stringify(withDaily))?.tables.daily_conditions[0]?.mood, 6);
   assert.equal(parseBackup('not json'), null);
+  const withoutCondition = {
+    ...payload,
+    tables: {
+      ...payload.tables,
+      game_sessions: [{ ...payload.tables.game_sessions[0], before_id: null, after_id: null }],
+    },
+  };
+  assert.equal(parseBackup(JSON.stringify(withoutCondition))?.tables.game_sessions[0]?.before_id, null);
   assert.equal(parseBackup(JSON.stringify({ ...payload, tables: { ...payload.tables, game_sessions: [{ ...payload.tables.game_sessions[0], before_id: 9 }] } })), null);
   assert.equal(parseBackup(JSON.stringify({ ...withDaily, tables: { ...withDaily.tables, daily_conditions: [{ ...withDaily.tables.daily_conditions[0], date: '18日' }] } })), null);
 });

@@ -10,7 +10,7 @@ export default function Games() {
   return (
     <ScrollView style={styles.screen}>
       <Title>リカバリーゲーム</Title>
-      <Text style={[styles.muted, { marginBottom: 15 }]}>プレイ前後の変化を記録します。途中で終えても大丈夫です。</Text>
+      <Text style={[styles.muted, { marginBottom: 15 }]}>体調入力は任意です。残さなくても遊べます。途中で終えても大丈夫です。</Text>
       {GAMES.map(game => {
         const visual = GAME_VISUAL[game.id];
         return (

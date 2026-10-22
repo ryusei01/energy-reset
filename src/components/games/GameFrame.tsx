@@ -8,7 +8,7 @@ export function GameFrame({
   title,
   meta,
   onEnd,
-  endLabel = '終了して記録',
+  endLabel = '終了する',
   children,
 }: {
   colors: readonly [string, string];

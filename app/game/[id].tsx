@@ -11,7 +11,7 @@ import { RhythmReset } from '../../src/components/games/RhythmReset';
 import { SmallQuest } from '../../src/components/games/SmallQuest';
 import { GAMES, type Condition, type GameId, delta, xpProgress } from '../../src/lib/games';
 import { formatDate, growthLabel, type CompanionKind } from '../../src/lib/play';
-import { endSession, getCompanionKind, getDailyCondition, getLatestConditionLog, getPlayPrefs, getXp, saveDailyCondition, startSession, type PlayPrefs } from '../../src/db/database';
+import { endSession, getCompanionKind, getDailyCondition, getPlayPrefs, getXp, saveDailyCondition, startSession, type PlayPrefs } from '../../src/db/database';
 
 const initial: Condition = { sleepiness: 5, fatigue: 5, mood: 5, stress: 5 };
 const defaultPrefs: PlayPrefs = { sound: true, haptic: true, reminder: false, reminderHour: 21, reminderMinute: 0 };
@@ -36,8 +36,11 @@ export default function GameScreen() {
   const [stage, setStage] = useState<'before' | 'play' | 'after' | 'done'>('before');
   const [before, setBefore] = useState<Condition>(initial);
   const [after, setAfter] = useState<Condition>(initial);
-  const [beforeLogId, setBeforeLogId] = useState<number | null>(null);
-  const [beforeDirty, setBeforeDirty] = useState(false);
+  const [savedBefore, setSavedBefore] = useState<Condition | null>(null);
+  const [loggedBefore, setLoggedBefore] = useState<Condition | null>(null);
+  const [loggedAfter, setLoggedAfter] = useState<Condition | null>(null);
+  const [enterBefore, setEnterBefore] = useState(false);
+  const [enterAfter, setEnterAfter] = useState(false);
   const [seconds, setSeconds] = useState(game?.duration ?? 120);
   const [score, setScore] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -62,21 +65,15 @@ export default function GameScreen() {
     if (stage !== 'before') return;
     let cancelled = false;
     const today = formatDate(new Date());
-    getDailyCondition(today).then(async log => {
+    getDailyCondition(today).then(log => {
       if (cancelled) return;
       if (log) {
-        setBefore({ sleepiness: log.sleepiness, fatigue: log.fatigue, mood: log.mood, stress: log.stress });
-        setBeforeLogId(log.id);
-        setBeforeDirty(false);
+        const next = { sleepiness: log.sleepiness, fatigue: log.fatigue, mood: log.mood, stress: log.stress };
+        setBefore(next);
+        setSavedBefore(next);
         return;
       }
-      const latest = await getLatestConditionLog();
-      if (cancelled) return;
-      if (latest && formatDate(new Date(latest.recorded_at)) === today) {
-        setBefore({ sleepiness: latest.sleepiness, fatigue: latest.fatigue, mood: latest.mood, stress: latest.stress });
-      }
-      setBeforeLogId(null);
-      setBeforeDirty(true);
+      setSavedBefore(null);
     }).catch(console.error);
     getPlayPrefs().then(next => {
       if (!cancelled) setPrefs(next);
@@ -95,6 +92,10 @@ export default function GameScreen() {
   useEffect(() => {
     setStage('before');
     setScore(0);
+    setEnterBefore(false);
+    setEnterAfter(false);
+    setLoggedBefore(null);
+    setLoggedAfter(null);
     session.current = null;
     if (game) setSeconds(game.duration);
   }, [game, gameId]);
@@ -118,21 +119,15 @@ export default function GameScreen() {
     );
   }
 
-  const useSavedBefore = !beforeDirty && beforeLogId != null;
-  const growth = xpProgress(xp);
-  const editBefore = (value: Condition) => {
-    setBefore(value);
-    setBeforeDirty(true);
-    setBeforeLogId(null);
-  };
-  const begin = async () => {
+  const begin = async (condition: Condition | null, saveDaily = false) => {
     setBusy(true);
     try {
-      if (!useSavedBefore) await saveDailyCondition({ date: formatDate(new Date()), ...before });
-      session.current = await startSession(game.id, before);
+      if (saveDaily && condition) await saveDailyCondition({ date: formatDate(new Date()), ...condition });
+      session.current = await startSession(game.id, condition);
+      setLoggedBefore(condition);
       setScore(0);
       setSeconds(game.duration);
-      setAfter(before);
+      setAfter(condition ?? initial);
       setStage('play');
     } catch (error) {
       console.error(error);
@@ -141,11 +136,12 @@ export default function GameScreen() {
       setBusy(false);
     }
   };
-  const finish = async () => {
+  const finish = async (condition: Condition | null) => {
     if (session.current === null) return;
     setBusy(true);
     try {
-      await endSession(session.current, after, score);
+      await endSession(session.current, condition, score);
+      setLoggedAfter(condition);
       setXp(await getXp());
       setStage('done');
     } catch (error) {
@@ -155,7 +151,8 @@ export default function GameScreen() {
       setBusy(false);
     }
   };
-  const change = delta(before, after);
+  const change = loggedBefore && loggedAfter ? delta(loggedBefore, loggedAfter) : null;
+  const growth = xpProgress(xp);
   const playProps = { sound: prefs.sound, haptic: prefs.haptic, seconds, score, onScore: setScore, onEnd: () => setStage('after') };
 
   if (stage === 'play') {
@@ -174,28 +171,45 @@ export default function GameScreen() {
     <ScrollView style={styles.screen}>
       <StatusBar style="dark" />
       <Title>{game.name}</Title>
-      {stage === 'before' && useSavedBefore && (
+      {stage === 'before' && (
         <Card>
-          <Text style={styles.label}>今日の体調でプレイ</Text>
-          <Text style={styles.text}>眠気 {before.sleepiness}　だるさ {before.fatigue}　気分 {before.mood}　ストレス {before.stress}</Text>
-          <Text style={styles.muted}>今日残した体調をプレイ前の基準に使います。日ごとの記録はそのまま残ります。</Text>
-          <Button title="ゲーム開始" disabled={busy} onPress={begin} />
-          <Button secondary title="体調を入力し直す" onPress={() => { setBeforeDirty(true); setBeforeLogId(null); }} />
-        </Card>
-      )}
-      {stage === 'before' && !useSavedBefore && (
-        <Card>
-          <Text style={styles.label}>プレイ前の体調</Text>
-          <Text style={styles.muted}>今日の体調はまだ残していません。プレイ前の状態を入力してください。今日の記録としても残せます。</Text>
-          <ConditionForm value={before} onChange={editBefore} />
-          <Button title="ゲーム開始" disabled={busy} onPress={begin} />
+          <Text style={styles.label}>準備</Text>
+          <Text style={styles.muted}>体調入力は任意です。残さなくてもゲームを始められます。</Text>
+          {savedBefore && !enterBefore && (
+            <>
+              <Text style={styles.text}>今日の体調　眠気 {savedBefore.sleepiness}　だるさ {savedBefore.fatigue}　気分 {savedBefore.mood}　ストレス {savedBefore.stress}</Text>
+              <Text style={styles.muted}>残してあれば変化の記録に使えます。使わなくても始められます。</Text>
+              <Button title="今日の体調で始める" disabled={busy} onPress={() => begin(savedBefore)} />
+            </>
+          )}
+          <Button title={savedBefore && !enterBefore ? '体調なしで始める' : 'ゲーム開始'} disabled={busy} onPress={() => begin(null)} secondary={Boolean(savedBefore && !enterBefore)} />
+          {!enterBefore && <Button secondary title="体調を残してから始める" onPress={() => setEnterBefore(true)} />}
+          {enterBefore && (
+            <>
+              <ConditionForm value={before} onChange={setBefore} />
+              <Button title="この体調で始める" disabled={busy} onPress={() => begin(before, savedBefore == null)} />
+              <Button secondary title="体調入力をやめる" onPress={() => setEnterBefore(false)} />
+            </>
+          )}
         </Card>
       )}
       {stage === 'after' && (
         <Card>
-          <Text style={styles.label}>プレイ後の体調</Text>
-          <ConditionForm value={after} onChange={setAfter} />
-          <Button title="結果を保存" disabled={busy} onPress={finish} />
+          <Text style={styles.label}>プレイ終了</Text>
+          <Text style={styles.muted}>体調入力は任意です。残さなくても完了できます。</Text>
+          {!enterAfter && (
+            <>
+              <Button title="完了する" disabled={busy} onPress={() => finish(null)} />
+              <Button secondary title="体調を残す" onPress={() => setEnterAfter(true)} />
+            </>
+          )}
+          {enterAfter && (
+            <>
+              <ConditionForm value={after} onChange={setAfter} />
+              <Button title="体調を残して完了" disabled={busy} onPress={() => finish(after)} />
+              <Button secondary title="記録せずに完了" disabled={busy} onPress={() => finish(null)} />
+            </>
+          )}
         </Card>
       )}
       {stage === 'done' && (
@@ -204,9 +218,15 @@ export default function GameScreen() {
           <Companion kind={kind} level={growth.level} progress={growth.ratio} size={140} />
           <ProgressBar value={growth.into} max={growth.need} label={`Lv.${growth.level} ${growthLabel(kind, growth.level, growth.ratio)}　${growth.into} / ${growth.need} XP`} />
           <Text style={styles.text}>スコア：{score}　セッションXP：15　その日の初回プレイ：+5{game.id === 'quest' && score > 0 ? '　クエスト達成XP：20' : ''}</Text>
-          <Text style={styles.text}>眠気の改善：{change.sleepiness}　だるさの改善：{change.fatigue}</Text>
-          <Text style={styles.text}>気分の変化：{change.mood}　ストレスの改善：{change.stress}</Text>
-          <Text style={styles.muted}>数値は自己評価の変化です。悪化した場合は休息を優先してください。日ごとの体調は上書きされません。</Text>
+          {change ? (
+            <>
+              <Text style={styles.text}>眠気の改善：{change.sleepiness}　だるさの改善：{change.fatigue}</Text>
+              <Text style={styles.text}>気分の変化：{change.mood}　ストレスの改善：{change.stress}</Text>
+              <Text style={styles.muted}>数値は自己評価の変化です。悪化した場合は休息を優先してください。日ごとの体調は上書きされません。</Text>
+            </>
+          ) : (
+            <Text style={styles.muted}>体調を残していないため、変化は表示しません。日ごとの記録もそのままです。</Text>
+          )}
           <Button title="タスクを始める" onPress={() => router.replace('/(tabs)/tasks')} />
           <Button secondary title="ホームへ" onPress={() => router.replace('/(tabs)')} />
         </Card>

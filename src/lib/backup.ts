@@ -12,7 +12,7 @@ export type ConditionRow = {
 export type SessionRow = {
   id: number;
   game_id: string;
-  before_id: number;
+  before_id: number | null;
   after_id: number | null;
   started_at: string;
   ended_at: string | null;
@@ -97,14 +97,16 @@ export function parseBackup(text: string): BackupPayload | null {
 
   const game_sessions: SessionRow[] = [];
   for (const row of sessionSource) {
-    if (!isRecord(row) || !isInt(row.id, 1, 1_000_000_000) || !isText(row.game_id) || !GAME_IDS.has(row.game_id) || !isInt(row.before_id, 1, 1_000_000_000) || !isText(row.started_at) || !isInt(row.score, 0, 1_000_000)) return null;
-    if (!conditionIds.has(row.before_id)) return null;
-    const after_id = row.after_id === null ? null : row.after_id;
+    if (!isRecord(row) || !isInt(row.id, 1, 1_000_000_000) || !isText(row.game_id) || !GAME_IDS.has(row.game_id) || !isText(row.started_at) || !isInt(row.score, 0, 1_000_000)) return null;
+    const before_id = row.before_id === null || row.before_id === undefined ? null : row.before_id;
+    if (before_id !== null && !isInt(before_id, 1, 1_000_000_000)) return null;
+    if (before_id !== null && !conditionIds.has(before_id)) return null;
+    const after_id = row.after_id === null || row.after_id === undefined ? null : row.after_id;
     if (after_id !== null && !isInt(after_id, 1, 1_000_000_000)) return null;
     if (after_id !== null && !conditionIds.has(after_id)) return null;
     const ended_at = row.ended_at === null ? null : row.ended_at;
     if (ended_at !== null && !isText(ended_at)) return null;
-    game_sessions.push({ id: row.id, game_id: row.game_id, before_id: row.before_id, after_id, started_at: row.started_at, ended_at, score: row.score });
+    game_sessions.push({ id: row.id, game_id: row.game_id, before_id, after_id, started_at: row.started_at, ended_at, score: row.score });
   }
   if (!unique(game_sessions.map(row => row.id))) return null;
 
